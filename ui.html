@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KhataFlow</title>
+<style>
+:root{color-scheme:dark;--mint:#3ef0b0;--alert:#ff6b4a;--ink:#f3f6fb;--mut:#9aa6bd;--glass:rgba(255,255,255,.08);--edge:rgba(255,255,255,.16)}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);
+  background:#0b1020;overflow-x:hidden}
+body::before,body::after{content:"";position:fixed;z-index:-1;width:520px;height:520px;border-radius:50%;filter:blur(110px);opacity:.55}
+body::before{background:#2a5cff;top:-140px;left:-120px}
+body::after{background:#12c9a0;bottom:-160px;right:-120px;opacity:.4}
+.glass{background:var(--glass);border:1px solid var(--edge);border-radius:18px;backdrop-filter:blur(18px) saturate(140%);
+  -webkit-backdrop-filter:blur(18px) saturate(140%);box-shadow:0 8px 32px rgba(0,0,0,.35)}
+header{max-width:1040px;margin:auto;padding:22px 18px 6px;display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+h1{margin:0;font-size:28px;letter-spacing:-.5px}
+h1 span{color:var(--mint)}
+.sub{color:var(--mut);font-size:13px;margin-top:2px}
+.tag{font-size:12px;color:var(--mut);border:1px solid var(--edge);padding:4px 10px;border-radius:99px;background:var(--glass)}
+main{max-width:1040px;margin:auto;padding:12px 18px;display:grid;grid-template-columns:290px 1fr;gap:14px}
+@media(max-width:720px){main{grid-template-columns:1fr}}
+.pad{padding:14px}
+h2{font-size:13px;margin:0 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:1px;font-weight:600}
+#total{display:flex;justify-content:space-between;align-items:baseline;padding:12px;border-radius:12px;margin-bottom:10px;background:rgba(255,255,255,.05)}
+#total b{font-size:22px}
+.cust{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:12px;cursor:pointer;border:1px solid transparent;margin-bottom:4px;transition:.2s}
+.cust:hover{background:rgba(255,255,255,.06)}
+.cust.sel{border-color:var(--edge);background:rgba(255,255,255,.07)}
+.bal{font-weight:700;font-variant-numeric:tabular-nums}
+.bal.owe{color:#ffc9bd}.bal.clear{color:var(--mint)}
+.row{display:flex;justify-content:space-between;gap:8px;padding:11px 8px;border-bottom:1px solid var(--edge);font-size:14px;border-radius:8px}
+.row small{color:var(--mut)}
+.cr{color:var(--alert);font-weight:700}.pay{color:var(--mint);font-weight:700}
+.flash-pay{animation:fpay 1.8s ease-out}
+.flash-credit{animation:fcr 1.8s ease-out}
+@keyframes fpay{0%{background:rgba(62,240,176,.4);box-shadow:0 0 28px rgba(62,240,176,.65)}100%{background:transparent;box-shadow:none}}
+@keyframes fcr{0%{background:rgba(255,107,74,.4);box-shadow:0 0 28px rgba(255,107,74,.65)}100%{background:transparent;box-shadow:none}}
+#delta{max-width:1040px;margin:0 auto;padding:0 18px;height:0;overflow:hidden;transition:height .3s}
+#delta.show{height:92px}
+#deltaCard{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;margin-top:2px;height:84px}
+#deltaCard.pay{border-color:var(--mint);box-shadow:0 0 34px rgba(62,240,176,.35)}
+#deltaCard.credit{border-color:var(--alert);box-shadow:0 0 34px rgba(255,107,74,.35)}
+#dName{font-size:20px;font-weight:700}
+#dKind{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:1px}
+#dNums{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums}
+#deltaCard.pay #dNums{color:var(--mint)}#deltaCard.credit #dNums{color:var(--alert)}
+#bar{max-width:1040px;margin:0 auto;padding:6px 18px 24px}
+#log{min-height:72px;font-size:14px;margin-bottom:10px;padding:12px 14px}
+#log p{margin:4px 0}.you{color:var(--mut)}.alexa{font-weight:600}
+.ctl{display:flex;gap:8px}
+input{flex:1;padding:13px 14px;border:1px solid var(--edge);border-radius:12px;background:var(--glass);color:var(--ink);font-size:15px;outline:none}
+input:focus{border-color:var(--mint)}
+button{border:0;border-radius:12px;padding:12px 16px;background:linear-gradient(135deg,#17c99a,#2a8cff);color:#fff;font-size:15px;cursor:pointer;font-weight:600}
+button.mic.on{background:#e0453a;animation:pulse 1s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 8px rgba(224,69,58,.25)}}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.chip{background:var(--glass);border:1px solid var(--edge);font-size:12px;padding:6px 10px;font-weight:500;color:var(--ink)}
+select{background:rgba(255,255,255,.08);color:#f3f6fb;border:1px solid rgba(255,255,255,.16);border-radius:8px;padding:5px;max-width:260px}option{color:#000}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Khata<span>Flow</span></h1>
+    <div class="sub">A Stateful Hinglish Voice-Ledger MCP Server for Alexa+</div>
+  </div>
+  <span class="tag">Simulated Alexa+ interface &middot; the MCP server is the real backend</span>
+</header>
+
+<div id="delta"><div id="deltaCard" class="glass">
+  <div><div id="dName"></div><div id="dKind"></div></div>
+  <div id="dNums"></div>
+</div></div>
+
+<main>
+  <section class="glass pad">
+    <div id="total"><span class="sub">Total outstanding</span><b id="totalVal"></b></div>
+    <h2>Customers</h2><div id="list"></div>
+  </section>
+  <section class="glass pad"><h2 id="title">Ledger</h2><div id="rows"></div></section>
+</main>
+
+<div id="bar">
+  <div id="log" class="glass"></div>
+  <div class="ctl">
+    <button class="mic" id="mic" onclick="listen()">&#127908; Speak</button>
+    <input id="txt" placeholder="Or type: Ravi ne 200 rupees payment diya" onkeydown="if(event.key==='Enter')send()">
+    <button onclick="send()">Send</button>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="sub" style="margin-top:12px">Reply voice: <select id="voice" onchange="speak('Ravi ka 300 rupees baaki hai.')"></select> (pick the one that sounds clearest)</div>
+</div>
+
+<script>
+const CUR = '\u20B9';  // change to '$' if you prefer
+const SID = 's' + Math.random().toString(36).slice(2, 8);
+let ledger = null, selected = null, hideTimer = null;
+const EXAMPLES = ["Ravi ka kitna baaki hai?", "Usme se 200 kam karo, usne cash diya", "Ravi ne 200 rupees payment diya",
+  "Sita ko 300 ka udhaar diya", "Sabse zyada udhaar kiska hai?", "Poori book ka summary do"];
+
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const fmt = n => CUR + Math.round(n).toLocaleString('en-IN');
+const totalOf = l => l.customers.reduce((s, c) => s + Math.max(c.balance, 0), 0);
+
+function render(flashName, delta) {
+  const cls = delta < 0 ? 'flash-pay' : delta > 0 ? 'flash-credit' : '';
+  const list = document.getElementById('list'); list.innerHTML = '';
+  ledger.customers.forEach(c => {
+    const d = el('div', 'cust' + (c.name === selected ? ' sel' : '') + (c.name === flashName ? ' ' + cls : ''));
+    d.append(el('span', '', c.name), el('span', 'bal' + (c.balance > 0 ? ' owe' : ' clear'), fmt(c.balance)));
+    d.onclick = () => { selected = c.name; render(); };
+    list.append(d);
+  });
+  document.getElementById('totalVal').textContent = fmt(totalOf(ledger));
+  document.getElementById('title').textContent = selected ? selected + ' \u2014 ledger' : 'Ledger';
+  const rows = document.getElementById('rows'); rows.innerHTML = '';
+  (ledger.entries[selected] || []).slice().reverse().forEach((e, i) => {
+    const r = el('div', 'row' + (i === 0 && selected === flashName ? ' ' + cls : ''));
+    const left = el('span');
+    left.append(el('div', '', e.kind === 'credit' ? 'Udhaar given' : 'Payment received (' + (e.note || 'cash') + ')'),
+      el('small', '', new Date(e.ts).toLocaleString('en-IN', {day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'})));
+    r.append(left, el('b', e.kind === 'credit' ? 'cr' : 'pay', (e.kind === 'credit' ? '\u25B2 +' : '\u25BC \u2212') + fmt(e.amount)));
+    rows.append(r);
+  });
+}
+
+function showDelta(name, before, after) {
+  const pay = after < before;
+  const card = document.getElementById('deltaCard');
+  card.className = 'glass ' + (pay ? 'pay' : 'credit');
+  document.getElementById('dName').textContent = name;
+  document.getElementById('dKind').textContent = pay ? '\u25BC Payment received' : '\u25B2 Credit given';
+  const nums = document.getElementById('dNums');
+  const t0 = performance.now();
+  (function step(t) {
+    const k = Math.min((t - t0) / 800, 1), v = before + (after - before) * k;
+    nums.textContent = fmt(before) + ' \u2192 ' + fmt(k < 1 ? v : after);
+    if (k < 1) requestAnimationFrame(step);
+  })(t0);
+  const box = document.getElementById('delta'); box.classList.add('show');
+  clearTimeout(hideTimer); hideTimer = setTimeout(() => box.classList.remove('show'), 6000);
+}
+
+function log(who, text) {
+  const p = el('p', who === 'You' ? 'you' : 'alexa', (who === 'You' ? 'You: ' : 'Alexa: ') + text);
+  const box = document.getElementById('log'); box.append(p); while (box.children.length > 4) box.firstChild.remove();
+}
+
+let VOICES = [];
+function loadVoices() {
+  if (!('speechSynthesis' in window)) return;
+  VOICES = speechSynthesis.getVoices();
+  const sel = document.getElementById('voice'), cur = sel.value; sel.innerHTML = '';
+  VOICES.slice().sort((a, b) => (b.lang === 'en-IN') - (a.lang === 'en-IN')).forEach(v => {
+    const o = document.createElement('option'); o.value = v.name; o.textContent = v.name + ' (' + v.lang + ')'; sel.append(o);
+  });
+  if (cur) sel.value = cur;
+}
+if ('speechSynthesis' in window) { speechSynthesis.onvoiceschanged = loadVoices; }
+
+function speak(t) {
+  if (!('speechSynthesis' in window)) return;
+  if (!VOICES.length) loadVoices();
+  const u = new SpeechSynthesisUtterance(t);
+  const v = VOICES.find(x => x.name === document.getElementById('voice').value);
+  if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'en-IN'; }
+  u.rate = 0.9;
+  speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
+
+async function say(text) {
+  if (!text.trim()) return;
+  log('You', text);
+  try {
+    const prev = {}; ledger.customers.forEach(c => prev[c.name] = c.balance);
+    const r = await fetch('/api/utter', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, session: SID})});
+    const d = await r.json();
+    ledger = d.ledger;
+    const name = d.customer;
+    if (name) selected = name;
+    const now = (ledger.customers.find(c => c.name === name) || {}).balance;
+    const before = prev[name] === undefined ? 0 : prev[name];
+    const delta = name && now !== undefined ? now - before : 0;
+    render(name, delta);
+    if (delta !== 0) showDelta(name, before, now);
+    log('Alexa', d.reply); speak(d.reply);
+  } catch (e) { log('Alexa', 'Could not reach the server.'); }
+}
+
+function send() { const i = document.getElementById('txt'); say(i.value); i.value = ''; }
+
+function listen() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { log('Alexa', 'Voice input needs Chrome. Type your command instead.'); return; }
+  const r = new SR(), b = document.getElementById('mic');
+  r.lang = 'en-IN'; r.interimResults = false;
+  r.onresult = e => say(e.results[0][0].transcript);
+  r.onerror = e => log('Alexa', 'Mic error: ' + e.error);
+  r.onend = () => b.classList.remove('on');
+  b.classList.add('on'); r.start();
+}
+
+EXAMPLES.forEach(t => { const b = el('button', 'chip', t); b.onclick = () => say(t); document.getElementById('chips').append(b); });
+loadVoices();
+fetch('/api/ledger').then(r => r.json()).then(d => { ledger = d; selected = d.customers[0] && d.customers[0].name; render(); });
+</script>
+</body>
+</html>
