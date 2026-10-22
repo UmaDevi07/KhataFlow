@@ -288,6 +288,7 @@ hai hain ab abhi aur bhi aaj
 kitna kitni baaki balance how much does owe owes history entries entry record bolo batao bata dikhao show what whats is
 usme isme usne isne usko isko uska iska unka unko uske iske wo woh ye yeh mera meri mere mujhe
 kiska kiski kiske kisko kya kab kaun
+create naya nayi open opening
 """.split()
 ) | STOP
 
@@ -349,6 +350,9 @@ def parse(text):
         return "customer_history", {"customer": name}
     if not amount and re.search(r"kitna|baaki|balance|how much", t):
         return "get_balance", {"customer": name}
+    # "create a ledger for gita of rupees 200" -> new customer with an opening udhaar
+    if amount and re.search(r"create|naya|nayi|new|open", t) and re.search(r"ledger|khata|customer|account", t):
+        return "add_udhaar", {"amount": amount, "customer": name}
     if amount and re.search(r"udhaar|credit|liya|lia|le gaya|le gayi|khate mein", t):
         return "add_udhaar", {"amount": amount, "customer": name}
     if amount and re.search(r"kam kar|diye|diya|paid|payment|wapas|return|de gaya|de gayi|cut", t):
