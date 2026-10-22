@@ -34,9 +34,7 @@ mcp = FastMCP(
     json_response=True,
 )
 
-# ---------------------------------------------------------------- storage
-
-
+# --storage
 class SqliteStore:
     def __init__(self, path):
         self.path = path
@@ -120,12 +118,9 @@ def seed():
 
 
 seed()
-
-# ---------------------------------------------------------------- context
-
+# -------- context
 SESSIONS = {}  # session_id -> last customer mentioned (the multi-turn memory)
 NEED_NAME = {"ok": False, "speech": "Kiska naam? Customer ka naam bataiye."}
-
 
 def resolve(customer, sid):
     """Use the named customer, or fall back to the last one in this conversation."""
@@ -250,15 +245,43 @@ TOOLS = {
 # ---------------------------------------------------------------- simulator NLU
 
 STOP = {"usme", "isme", "unka", "uska", "kitna", "aaj", "sabse", "mere", "ye", "wo", "sabka", "is", "us"}
+# words that are never a customer name (includes Chrome's spelling variants)
+FILLER = set("""
+ne neh nay nai ko koh ka kah kaa ki kee ke kay se me mein main
+udhaar udhar uddhar credit debit liya lia liye diya diye dia dena lena de le gaya gayi
+rupees rupee rupaye rupaya rs inr payment paid pay cash upi gpay phonepe paytm wapas return kam kar karo cut
+add give gave given took taken new customer khata khate account ledger of to for from the a an and
+hai hain ab abhi aur bhi aaj
+kitna kitni baaki balance how much does owe owes history entries entry record bolo batao bata dikhao show what whats is
+usme isme usne isne usko isko uska iska unka unko uske iske wo woh ye yeh mera meri mere mujhe
+kiska kiski kiske kisko kya kab kaun
+""".split()) | STOP
 
+PENDING = {}  # session -> (tool, args) waiting for a customer name
+
+
+def find_name(t):
+    """Customer name from a lowercase command, or ''."""
+    m = re.search(r"\b([a-z]+) (?:ne|neh|nay|ko|koh|ka|kah|kaa|ki|kee|ke|kay)\b", t)
+    if m and m.group(1) not in FILLER:
+        return m.group(1).title()
+    for w in re.findall(r"[a-z]+", t):  # fallback: first non-command word
+        if w not in FILLER:
+            return w.title()
+    return ""
+
+
+def bare_name(text):
+    """User answered 'Kiska naam?' with just a name, e.g. 'gita'."""
+    words = [w for w in re.findall(r"[a-z]+", text.lower()) if w not in FILLER]
+    return " ".join(words[:2]).title() if 0 < len(words) <= 2 else ""
 
 def parse(text):
     """Rule-based Hinglish parser. Returns (tool, args) or None."""
     t = text.lower().strip()
     m_amt = re.search(r"(\d[\d,]*(?:\.\d+)?)", t)
     amount = float(m_amt.group(1).replace(",", "")) if m_amt else None
-    m_name = re.search(r"\b([a-z]+) (?:ne|ko|ka|ki|ke)\b", t)
-    name = m_name.group(1).title() if m_name and m_name.group(1) not in STOP else ""
+    name = find_name(t)
 
     if re.search(r"sabse zyada|zyada udhaar|who owes|kis ka zyada|kiska zyada", t):
         return "who_owes_most", {}
@@ -316,7 +339,6 @@ def ledger_payload():
     customers = sorted(({"name": n, "balance": v} for n, v in balances().items()), key=lambda c: -c["balance"])
     return {"customers": customers, "entries": by}
 
-
 @mcp.custom_route("/", methods=["GET"])
 async def home(request: Request):
     return HTMLResponse((HERE / "ui.html").read_text(encoding="utf-8"))
@@ -332,7 +354,15 @@ async def api_utter(request: Request):
     body = await request.json()
     text = str(body.get("text", ""))[:300]
     sid = str(body.get("session", "default"))[:40]
-    parsed = parse(text) or bedrock_parse(text)
+
+    pend = PENDING.pop(sid, None)
+    parsed = parse(text)
+    if not parsed and pend:  # answer to "Kiska naam?"
+        nm = bare_name(text)
+        if nm:
+            parsed = (pend[0], {**pend[1], "customer": nm})
+    parsed = parsed or bedrock_parse(text)
+
     if not parsed:
         return JSONResponse({"reply": "Samajh nahi aaya, phir se boliye.", "tool": None, "ledger": ledger_payload()})
     tool, args = parsed
@@ -341,6 +371,8 @@ async def api_utter(request: Request):
         result = TOOLS[tool](session_id=sid, **args)
     except TypeError:
         return JSONResponse({"reply": "Samajh nahi aaya, phir se boliye.", "tool": None, "ledger": ledger_payload()})
+    if result is NEED_NAME:
+        PENDING[sid] = (tool, args)
     return JSONResponse(
         {
             "reply": result["speech"],
