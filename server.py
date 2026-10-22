@@ -125,7 +125,18 @@ seed()
 
 SESSIONS = {}  # session_id -> last customer mentioned (the multi-turn memory)
 PENDING = {}  # session_id -> (tool, args) waiting for a customer name
-NEED_NAME = {"ok": False, "speech": "Kiska naam? Customer ka naam bataiye."}
+LANG = {}  # session_id -> language of the last message ("hi" = Hindi/Hinglish, "en" = English)
+
+
+def both(hi, en):
+    """Every tool answers in Hinglish (speech) and English (speech_en)."""
+    return {"speech": hi, "speech_en": en}
+
+
+NEED_NAME = {
+    "ok": False,
+    **both("Kiska naam? Customer ka naam bataiye.", "Whose account? Please tell me the customer's name."),
+}
 
 
 def resolve(customer, sid):
@@ -152,14 +163,17 @@ def add_udhaar(amount: float, customer: str = "", session_id: str = "default") -
     if not name:
         return NEED_NAME
     if amount <= 0:
-        return {"ok": False, "speech": "Amount sahi nahi hai."}
+        return {"ok": False, **both("Amount sahi nahi hai.", "That amount isn't valid.")}
     STORE.add(entry(name, "credit", amount, "udhaar"))
     bal = balances().get(name, 0)
     return {
         "ok": True,
         "customer": name,
         "balance": bal,
-        "speech": f"{name} ke khate mein {money(amount)} rupees jod diye. Ab {money(bal)} rupees baaki hai.",
+        **both(
+            f"{name} ke khate mein {money(amount)} rupees jod diye. Ab {money(bal)} rupees baaki hai.",
+            f"Added {money(amount)} rupees to {name}'s account. Balance is now {money(bal)} rupees.",
+        ),
     }
 
 
@@ -176,7 +190,10 @@ def record_payment(amount: float, customer: str = "", mode: str = "cash", sessio
             "ok": False,
             "customer": name,
             "balance": bal,
-            "speech": f"{name} ka sirf {money(bal)} rupees baaki hai. Itna payment record nahi ho sakta.",
+            **both(
+                f"{name} ka sirf {money(bal)} rupees baaki hai. Itna payment record nahi ho sakta.",
+                f"{name} only owes {money(bal)} rupees. I can't record a larger payment.",
+            ),
         }
     STORE.add(entry(name, "payment", amount, mode))
     bal -= amount
@@ -184,7 +201,10 @@ def record_payment(amount: float, customer: str = "", mode: str = "cash", sessio
         "ok": True,
         "customer": name,
         "balance": bal,
-        "speech": f"{name} ka {money(amount)} rupees {mode} mein mil gaya. Ab {money(bal)} rupees baaki hai.",
+        **both(
+            f"{name} ka {money(amount)} rupees {mode} mein mil gaya. Ab {money(bal)} rupees baaki hai.",
+            f"Recorded {money(amount)} rupees {mode} from {name}. Balance is now {money(bal)} rupees.",
+        ),
     }
 
 
@@ -196,8 +216,13 @@ def get_balance(customer: str = "", session_id: str = "default") -> dict:
         return NEED_NAME
     b = balances()
     if name not in b:
-        return {"ok": False, "speech": f"{name} ka koi record nahi mila."}
-    return {"ok": True, "customer": name, "balance": b[name], "speech": f"{name} ka {money(b[name])} rupees baaki hai."}
+        return {"ok": False, **both(f"{name} ka koi record nahi mila.", f"No record found for {name}.")}
+    return {
+        "ok": True,
+        "customer": name,
+        "balance": b[name],
+        **both(f"{name} ka {money(b[name])} rupees baaki hai.", f"{name} owes {money(b[name])} rupees."),
+    }
 
 
 @mcp.tool()
@@ -208,11 +233,15 @@ def customer_history(customer: str = "", n: int = 5, session_id: str = "default"
         return NEED_NAME
     rows = [e for e in STORE.all() if e["customer"] == name][-max(1, min(n, 10)):][::-1]
     if not rows:
-        return {"ok": False, "speech": f"{name} ka koi record nahi mila."}
-    parts = [
-        f"{money(e['amount'])} {'udhaar' if e['kind'] == 'credit' else 'payment'}" for e in rows
-    ]
-    return {"ok": True, "customer": name, "entries": rows, "speech": f"{name} ke entries: " + ", ".join(parts) + "."}
+        return {"ok": False, **both(f"{name} ka koi record nahi mila.", f"No record found for {name}.")}
+    hi = [f"{money(e['amount'])} {'udhaar' if e['kind'] == 'credit' else 'payment'}" for e in rows]
+    en = [f"{money(e['amount'])} {'credit' if e['kind'] == 'credit' else 'payment'}" for e in rows]
+    return {
+        "ok": True,
+        "customer": name,
+        "entries": rows,
+        **both(f"{name} ke entries: " + ", ".join(hi) + ".", f"{name}'s latest entries: " + ", ".join(en) + "."),
+    }
 
 
 @mcp.tool()
@@ -224,7 +253,10 @@ def summarize_book(session_id: str = "default") -> dict:
         "ok": True,
         "total": total,
         "customers_owing": len(owing),
-        "speech": f"Total {money(total)} rupees baaki hai, {len(owing)} customers ka.",
+        **both(
+            f"Total {money(total)} rupees baaki hai, {len(owing)} customers ka.",
+            f"Total outstanding is {money(total)} rupees across {len(owing)} customers.",
+        ),
     }
 
 
@@ -233,12 +265,15 @@ def who_owes_most(n: int = 3, session_id: str = "default") -> dict:
     """The customers who owe the most, highest first."""
     top = sorted(((k, v) for k, v in balances().items() if v > 0), key=lambda kv: -kv[1])[: max(1, min(n, 10))]
     if not top:
-        return {"ok": True, "top": [], "speech": "Kisi ka udhaar baaki nahi hai."}
+        return {"ok": True, "top": [], **both("Kisi ka udhaar baaki nahi hai.", "Nobody owes anything right now.")}
     SESSIONS[session_id] = top[0][0]
     return {
         "ok": True,
         "top": [{"customer": k, "balance": v} for k, v in top],
-        "speech": "Sabse zyada baaki: " + ", ".join(f"{k} {money(v)} rupees" for k, v in top) + ".",
+        **both(
+            "Sabse zyada baaki: " + ", ".join(f"{k} {money(v)} rupees" for k, v in top) + ".",
+            "Highest balances: " + ", ".join(f"{k} {money(v)} rupees" for k, v in top) + ".",
+        ),
     }
 
 
@@ -251,12 +286,15 @@ def who_paid_most(n: int = 3, session_id: str = "default") -> dict:
             paid[e["customer"]] = paid.get(e["customer"], 0) + e["amount"]
     top = sorted(paid.items(), key=lambda kv: -kv[1])[: max(1, min(n, 10))]
     if not top:
-        return {"ok": True, "top": [], "speech": "Abhi tak kisi ne payment nahi diya."}
+        return {"ok": True, "top": [], **both("Abhi tak kisi ne payment nahi diya.", "No payments have been recorded yet.")}
     SESSIONS[session_id] = top[0][0]
     return {
         "ok": True,
         "top": [{"customer": k, "paid": v} for k, v in top],
-        "speech": "Sabse zyada payment: " + ", ".join(f"{k} {money(v)} rupees" for k, v in top) + ".",
+        **both(
+            "Sabse zyada payment: " + ", ".join(f"{k} {money(v)} rupees" for k, v in top) + ".",
+            "Top payers: " + ", ".join(f"{k} {money(v)} rupees" for k, v in top) + ".",
+        ),
     }
 
 
@@ -302,6 +340,29 @@ SPELLINGS = (
     ("kiskah", "kiska"),
     ("kiskaa", "kiska"),
 )
+
+
+# Hindi-origin words: if any appear (or the text is in Devanagari) we reply in Hindi/Hinglish
+HI_WORDS = set(
+    """
+ne neh nay nai ko koh ka kah kaa ki kee ke kay hai hain kitna kitni baaki udhaar udhar diya diye dia liya lia liye
+kam karo kar sabse sabseh sabsay zyada jyada zyaada kiska kiski kiske kisne kaun naam bataiye boliye batao bata
+dikhao usme isme usne isne uska iska unka wo woh ye yeh mera meri mere mujhe aur mein se rupaye rupaya khata khate
+naya nayi wapas poori sabka
+""".split()
+)
+
+
+def detect_lang(text, sid):
+    """'hi' for Hindi/Hinglish, 'en' for English. Bare one-word answers keep the previous language."""
+    if re.search(r"[\u0900-\u097F]", text):
+        return "hi"
+    words = re.findall(r"[a-z]+", text.lower())
+    if any(w in HI_WORDS for w in words):
+        return "hi"
+    if len(words) >= 2:
+        return "en"
+    return LANG.get(sid, "en")
 
 
 def find_name(t):
@@ -417,6 +478,11 @@ async def api_utter(request: Request):
     body = await request.json()
     text = str(body.get("text", ""))[:300]
     sid = str(body.get("session", "default"))[:40]
+    lang = detect_lang(text, sid)
+    LANG[sid] = lang
+    not_understood = (
+        "Sorry, I didn't catch that. Please try again." if lang == "en" else "Samajh nahi aaya, phir se boliye."
+    )
 
     pend = PENDING.pop(sid, None)
     parsed = parse(text)
@@ -427,18 +493,19 @@ async def api_utter(request: Request):
     parsed = parsed or bedrock_parse(text)
 
     if not parsed:
-        return JSONResponse({"reply": "Samajh nahi aaya, phir se boliye.", "tool": None, "ledger": ledger_payload()})
+        return JSONResponse({"reply": not_understood, "lang": lang, "tool": None, "ledger": ledger_payload()})
     tool, args = parsed
     args = {k: v for k, v in args.items() if v not in (None, "")}
     try:
         result = TOOLS[tool](session_id=sid, **args)
     except TypeError:
-        return JSONResponse({"reply": "Samajh nahi aaya, phir se boliye.", "tool": None, "ledger": ledger_payload()})
+        return JSONResponse({"reply": not_understood, "lang": lang, "tool": None, "ledger": ledger_payload()})
     if result is NEED_NAME:
         PENDING[sid] = (tool, args)
     return JSONResponse(
         {
-            "reply": result["speech"],
+            "reply": result["speech_en"] if lang == "en" else result["speech"],
+            "lang": lang,
             "tool": tool,
             "args": args,
             "customer": result.get("customer"),
