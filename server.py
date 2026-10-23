@@ -327,6 +327,7 @@ kitna kitni baaki balance how much does owe owes history entries entry record bo
 usme isme usne isne usko isko uska iska unka unko uske iske wo woh ye yeh mera meri mere mujhe
 kiska kiski kiske kisko kya kab kaun
 create naya nayi open opening
+usmein ismein usmain ismain usmai ismai usmey ismey usse isse unmein unme
 """.split()
 ) | STOP
 
